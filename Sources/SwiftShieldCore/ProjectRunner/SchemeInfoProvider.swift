@@ -11,6 +11,16 @@ struct SchemeInfoProvider: SchemeInfoProviderProtocol {
         projectFile.path.hasSuffix(".xcworkspace")
     }
 
+    private let ignoredCompilerFlags = [
+        "-use-frontend-parseable-output",
+        "-Xfrontend",
+        "-serialize-debugging-options",
+        "-warn-long-function-bodies\\=500",
+        "-warn-long-expression-type-checking\\=500",
+        "-warn-long-function-bodies=500",
+        "-warn-long-expression-type-checking=500",
+    ]
+
     private typealias MutableModuleData = (source: [File], plists: [File], args: [String], order: Int)
     private typealias MutableModuleDictionary = [String: MutableModuleData]
 
@@ -48,12 +58,16 @@ struct SchemeInfoProvider: SchemeInfoProviderProtocol {
                 try parsePlistPhase(line: line + lines[index + 1], modules: &modules)
             }
         }
-        return modules.filter { modulesToIgnore.contains($0.key) == false }.sorted { $0.value.order < $1.value.order }.map {
-            Module(name: $0.key,
-                   sourceFiles: Set($0.value.source),
-                   plists: Set($0.value.plists.removeDuplicates()),
-                   compilerArguments: $0.value.args)
-        }
+
+        return modules
+            .filter { modulesToIgnore.contains($0.key) == false }
+            .sorted { $0.value.order < $1.value.order }
+            .map {
+                Module(name: $0.key,
+                       sourceFiles: Set($0.value.source),
+                       plists: Set($0.value.plists.removeDuplicates()),
+                       compilerArguments: $0.value.args)
+            }
     }
 
     private func parseMergeSwiftModulePhase(line: String, moduleName: String, modules: inout MutableModuleDictionary) throws {
@@ -103,6 +117,8 @@ struct SchemeInfoProvider: SchemeInfoProviderProtocol {
         } else {
             files = parseModuleFiles(from: relevantArguments)
         }
+
+        compilerArguments = compilerArguments.filter { !ignoredCompilerFlags.contains($0) }
 
         set(sourceFiles: files, to: moduleName, modules: &modules)
         set(compilerArgs: compilerArguments, to: moduleName, modules: &modules)
